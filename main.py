@@ -17,6 +17,12 @@ def initialize_session_state():
     
     if 'connection_status' not in st.session_state:
         st.session_state.connection_status = None
+    
+    if 'available_models' not in st.session_state:
+        st.session_state.available_models = []
+        
+    if 'selected_model' not in st.session_state:
+        st.session_state.selected_model = None
 
 
 def check_connection():
@@ -25,6 +31,15 @@ def check_connection():
         with st.spinner("Testing connection to LM Studio..."):
             result = st.session_state.client.test_connection()
             st.session_state.connection_status = result
+            
+            # Update available models if connection is successful
+            if result['status'] == 'success' and 'models' in result:
+                models_data = result['models'].get('data', [])
+                st.session_state.available_models = models_data
+                
+                # Set default model if none selected and models are available
+                if not st.session_state.selected_model and models_data:
+                    st.session_state.selected_model = models_data[0].get('id', 'local-model')
     
     if st.session_state.connection_status:
         status = st.session_state.connection_status
@@ -62,8 +77,11 @@ def handle_user_input():
                 api_messages = [{"role": msg["role"], "content": msg["content"]} 
                               for msg in st.session_state.messages]
                 
-                # Send request to LM Studio
-                response = st.session_state.client.send_message(api_messages)
+                # Send request to LM Studio with selected model
+                response = st.session_state.client.send_message(
+                    api_messages,
+                    model=st.session_state.selected_model
+                )
                 
                 # Extract and display response
                 assistant_response = st.session_state.client.extract_message_content(response)
@@ -84,6 +102,35 @@ def sidebar_settings():
     st.sidebar.subheader("Connection")
     check_connection()
     
+    # Model selection
+    st.sidebar.subheader("Model Selection")
+    if st.session_state.available_models:
+        model_options = [model.get('id', 'Unknown') for model in st.session_state.available_models]
+        
+        # Find current selection index
+        current_index = 0
+        if st.session_state.selected_model:
+            try:
+                current_index = model_options.index(st.session_state.selected_model)
+            except ValueError:
+                current_index = 0
+        
+        selected_model = st.sidebar.selectbox(
+            "Choose model:",
+            options=model_options,
+            index=current_index,
+            help="Select which model to use for chat"
+        )
+        
+        # Update selected model if changed
+        if selected_model != st.session_state.selected_model:
+            st.session_state.selected_model = selected_model
+            st.sidebar.success(f"Model changed to: {selected_model}")
+    else:
+        st.sidebar.info("📡 Connect first to load available models")
+        if st.session_state.selected_model:
+            st.sidebar.text(f"Using: {st.session_state.selected_model}")
+    
     # Chat controls
     st.sidebar.subheader("Chat Controls")
     if st.sidebar.button("Clear Chat"):
@@ -98,6 +145,8 @@ def sidebar_settings():
     # Statistics
     st.sidebar.subheader("Statistics")
     st.sidebar.text(f"Messages: {len(st.session_state.messages)}")
+    if st.session_state.selected_model:
+        st.sidebar.text(f"Model: {st.session_state.selected_model}")
 
 
 def main():
