@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir /a C:UsersAdminDevellms_chatCC)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
